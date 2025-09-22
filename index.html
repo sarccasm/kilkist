@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Кількісна оцінка ризику — A/B/C</title>
+  <style>
+    :root { --gap: 14px; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", sans-serif; margin: 0; padding: 24px; background: #0f172a; color: #e5e7eb; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 16px; opacity: .9; margin: 10px 0; }
+    .wrap { display: grid; grid-template-columns: 1fr; gap: var(--gap); max-width: 1100px; margin: 0 auto; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    .grid { display: grid; gap: 10px; }
+    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    label { font-size: 12px; color: #9ca3af; display: block; margin-bottom: 6px; }
+    input[type="number"] { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #374151; background: #0b1220; color: #e5e7eb; }
+    input[type="number"]:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,.15); }
+    .muted { color: #9ca3af; font-size: 12px; }
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    button { background: #2563eb; border: none; padding: 10px 14px; border-radius: 10px; color: #fff; cursor: pointer; font-weight: 600; }
+    button:active { transform: translateY(1px); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { border-bottom: 1px solid #1f2937; padding: 10px 8px; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    thead th { position: sticky; top: 0; background: #0f172a; z-index: 1; }
+    .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #374151; background: #0b1220; }
+    .ok { color: #22c55e; }
+    .warn { color: #f59e0b; }
+    .bad { color: #ef4444; }
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+    .mini { background: #0b1220; border: 1px dashed #334155; border-radius: 12px; padding: 10px 12px; }
+    .kpi { font-size: 18px; font-weight: 700; }
+    .foot { color: #9ca3af; font-size: 12px; margin-top: 6px; }
+    @media (max-width: 860px){ .cards{ grid-template-columns: 1fr; } .grid.cols-4{ grid-template-columns: repeat(2,1fr);} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Інструментарій кількісної оцінки ризику</h1>
+      <div class="muted">Приклад для трьох проєктів A, B, C з трьома станами економіки. Можна змінювати дані — значення у <b>тис. грн</b>.</div>
+    </div>
+
+    <div class="card">
+      <h2>1) Ймовірності станів економіки</h2>
+      <div class="grid cols-3">
+        <div><label>p₁</label><input id="p1" type="number" step="0.0001" value="0.1"></div>
+        <div><label>p₂</label><input id="p2" type="number" step="0.0001" value="0.5"></div>
+        <div><label>p₃</label><input id="p3" type="number" step="0.0001" value="0.4"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <span class="muted">Сума p:</span>
+        <span id="psum" class="pill">—</span>
+        <span id="psumNote" class="muted"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2) NPV проєктів (тис. грн)</h2>
+      <div class="grid cols-4" style="align-items:end">
+        <div></div>
+        <div><label>Стан 1</label></div>
+        <div><label>Стан 2</label></div>
+        <div><label>Стан 3</label></div>
+
+        <div><label>Проєкт A</label></div>
+        <div><input id="A1" type="number" step="0.01" value="-500"></div>
+        <div><input id="A2" type="number" step="0.01" value="500"></div>
+        <div><input id="A3" type="number" step="0.01" value="-250"></div>
+
+        <div><label>Проєкт B</label></div>
+        <div><input id="B1" type="number" step="0.01" value="-250"></div>
+        <div><input id="B2" type="number" step="0.01" value="-250"></div>
+        <div><input id="B3" type="number" step="0.01" value="500"></div>
+
+        <div><label>Проєкт C</label></div>
+        <div><input id="C1" type="number" step="0.01" value="75"></div>
+        <div><input id="C2" type="number" step="0.01" value="75"></div>
+        <div><input id="C3" type="number" step="0.01" value="0"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="calcBtn">Порахувати</button>
+        <span class="muted">Результати нижче оновлюються миттєво.</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3) Підсумкова таблиця показників</h2>
+      <div class="mini" style="margin-bottom:10px">Позначення: M — очікуване значення; V — дисперсія; σ — стандартне відхилення; CV=σ/M; SSV — семіквадратичне відхилення; CSV=SSV/M; P≤0 — імовірність збитків; Z — очікувані збитки.</div>
+      <table id="outTable">
+        <thead>
+          <tr>
+            <th>Проєкт</th>
+            <th>M</th>
+            <th>V</th>
+            <th>σ</th>
+            <th>CV</th>
+            <th>SSV</th>
+            <th>CSV</th>
+            <th>P≤0</th>
+            <th>Z</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>4) Рекомендації</h2>
+      <div class="cards" id="recs"></div>
+      <div class="foot">Логіка: «Найбільша дохідність» — максимум M; «Найнижчий ризик» — мінімум σ; «Найстабільніший» — мінімум CV; «Найменший несприятливий ризик» — мінімум SSV.</div>
+    </div>
+  </div>
+
+  <script>
+    const $ = sel => document.querySelector(sel);
+    const num = id => parseFloat($(id).value);
+    const dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0);
+    const mean = (x, p) => dot(x, p);
+    const variance = (x, p, m) => x.reduce((s, xi, i) => s + p[i] * (xi - m) ** 2, 0);
+    const std = v => Math.sqrt(v);
+    const downsideStd = (x, p, m) => Math.sqrt(x.reduce((s, xi, i) => s + (xi < m ? p[i] * (xi - m) ** 2 : 0), 0));
+    const probLoss = (x, p) => x.reduce((s, xi, i) => s + (xi <= 0 ? p[i] : 0), 0);
+    const expectedLoss = (x, p) => x.reduce((s, xi, i) => s + (xi < 0 ? xi * p[i] : 0), 0);
+    const fmt = x => Number.isFinite(x) ? Number(x.toFixed(3)) : '—';
+
+    function getInputs(){
+      const p = [num('#p1'), num('#p2'), num('#p3')];
+      const A = [num('#A1'), num('#A2'), num('#A3')];
+      const B = [num('#B1'), num('#B2'), num('#B3')];
+      const C = [num('#C1'), num('#C2'), num('#C3')];
+      return { p, projects: { A, B, C } };
+    }
+
+    function evaluate(label, x, p){
+      const M = mean(x, p);
+      const V = variance(x, p, M);
+      const S = std(V);
+      const CV = S / M;
+      const SSV = downsideStd(x, p, M);
+      const CSV = SSV / M;
+      const P0 = probLoss(x, p);
+      const Z = expectedLoss(x, p);
+      return { Project: label, M, V, S, CV, SSV, CSV, P0, Z };
+    }
+
+    function render(){
+      const { p, projects } = getInputs();
+      const psum = p.reduce((a,b)=>a+b,0);
+      const psumEl = $('#psum');
+      psumEl.textContent = fmt(psum);
+      $('#psumNote').textContent = Math.abs(psum-1) < 1e-9 ? 'OK' : 'Не дорівнює 1';
+      psumEl.className = 'pill ' + (Math.abs(psum-1)<1e-9? 'ok':'warn');
+
+      const rows = Object.entries(projects).map(([k,v]) => evaluate(k, v, p));
+      const tbody = $('#outTable tbody');
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.Project}</td>
+          <td>${fmt(r.M)}</td>
+          <td>${fmt(r.V)}</td>
+          <td>${fmt(r.S)}</td>
+          <td>${fmt(r.CV)}</td>
+          <td>${fmt(r.SSV)}</td>
+          <td>${fmt(r.CSV)}</td>
+          <td>${fmt(r.P0)}</td>
+          <td>${fmt(r.Z)}</td>
+        </tr>`).join('');
+
+      const byMean = [...rows].sort((a,b)=> b.M - a.M)[0];
+      const byRisk = [...rows].sort((a,b)=> a.S - b.S)[0];
+      const byCV   = [...rows].sort((a,b)=> a.CV - b.CV)[0];
+      const byDown = [...rows].sort((a,b)=> a.SSV - b.SSV)[0];
+
+      $('#recs').innerHTML = `
+        <div class="mini"><div class="muted">Найбільша очікувана дохідність</div><div class="kpi">${byMean.Project}</div><div class="foot">M = ${fmt(byMean.M)}</div></div>
+        <div class="mini"><div class="muted">Найнижчий ризик (σ)</div><div class="kpi">${byRisk.Project}</div><div class="foot">σ = ${fmt(byRisk.S)}</div></div>
+        <div class="mini"><div class="muted">Найстабільніший (CV)</div><div class="kpi">${byCV.Project}</div><div class="foot">CV = ${fmt(byCV.CV)}</div></div>
+        <div class="mini"><div class="muted">Найменший несприятливий ризик (SSV)</div><div class="kpi">${byDown.Project}</div><div class="foot">SSV = ${fmt(byDown.SSV)}</div></div>
+      `;
+    }
+
+    document.querySelectorAll('input').forEach(i=> i.addEventListener('input', render));
+    $('#calcBtn').addEventListener('click', render);
+    render();
+  </script>
+</body>
+</html>
