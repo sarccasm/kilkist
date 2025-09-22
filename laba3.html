@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<body>
+<pre id="out"></pre>
+<script>
+function U(x) {
+  return (x + 5) ** 2 / 15;
+}
+
+const probs = [0.5, 0.1, 0.4];
+const decisions = {
+  "I": [10, -5, -5],
+  "II": [-5, -5, 10],
+  "III": [1.5, 1.5, 0],
+  "IV": [0, 0, 0]
+};
+
+let text = "Рішення | Очікувана корисність\n";
+text += "-----------------------------\n";
+
+for (let key in decisions) {
+  let EU = 0;
+  for (let i = 0; i < probs.length; i++) {
+    EU += probs[i] * U(decisions[key][i]);
+  }
+  text += key + "       | " + EU.toFixed(3) + "\n";
+}
+
+document.getElementById("out").textContent = text;
+</script>
+</body>
+</html>
