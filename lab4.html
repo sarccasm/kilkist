@@ -1,0 +1,205 @@
+
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Марковіц калькулятор 2 ризикові + безризиковий</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;margin:24px;line-height:1.35}
+  h1{font-size:20px;margin:0 0 8px}
+  .row{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:16px;margin-bottom:16px}
+  label{display:block;font-size:12px;color:#444;margin-bottom:4px}
+  input{width:100%;padding:8px;border:1px solid #ccc;border-radius:8px}
+  button{padding:10px 14px;border:0;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.08);cursor:pointer}
+  #out pre{background:#f7f7f8;border:1px solid #eee;border-radius:12px;padding:12px;overflow:auto}
+  canvas{max-width:800px;height:400px;border:1px dashed #ddd;border-radius:12px;background:linear-gradient(#fff,#fafafa)}
+  small{color:#777}
+</style>
+</head>
+<body>
+<h1>Марковіц: 2 ризикові активи (A₂, A₃) + безризиковий (A₁)</h1>
+<div class="row">
+  <div>
+    <label>μ₂ (очік. дохідність A₂), % річних</label>
+    <input id="mu2" type="number" step="0.01" value="30">
+  </div>
+  <div>
+    <label>μ₃ (очік. дохідність A₃), % річних</label>
+    <input id="mu3" type="number" step="0.01" value="45">
+  </div>
+  <div>
+    <label>r_f (безризикова ставка), % річних</label>
+    <input id="rf" type="number" step="0.01" value="10">
+  </div>
+</div>
+<div class="row">
+  <div>
+    <label>σ₂ (стандартне відхилення A₂), %</label>
+    <input id="s2" type="number" step="0.01" value="10">
+  </div>
+  <div>
+    <label>σ₃ (стандартне відхилення A₃), %</label>
+    <input id="s3" type="number" step="0.01" value="15">
+  </div>
+  <div>
+    <label>ρ₂₃ (кореляція A₂ з A₃)</label>
+    <input id="rho" type="number" step="0.01" value="-0.8">
+  </div>
+</div>
+<div class="row">
+  <div>
+    <label>Цільова μ портфеля (для прикладів b,c), %</label>
+    <input id="muTarget" type="number" step="0.01" value="25">
+  </div>
+  <div>
+    <label>Додаткова μ (перевірка, напр. 40%)</label>
+    <input id="muExtra" type="number" step="0.01" value="40">
+  </div>
+  <div style="display:flex;align-items:end;gap:10px">
+    <button id="run">Обчислити</button>
+    <button id="plot">Побудувати</button>
+  </div>
+</div>
+
+<canvas id="chart" width="800" height="400"></canvas>
+<div id="out"><pre>Натисніть «Обчислити»</pre></div>
+
+<script>
+function inv2(a,b,c,d){
+  const det = a*d - b*c;
+  return [[ d/det, -b/det],[-c/det, a/det]];
+}
+function mul2(A, v){
+  return [A[0][0]*v[0]+A[0][1]*v[1], A[1][0]*v[0]+A[1][1]*v[1]];
+}
+function dot(x,y){ return x[0]*y[0] + x[1]*y[1]; }
+function add(x,y){ return [x[0]+y[0], x[1]+y[1]]; }
+function scale(x,k){ return [k*x[0], k*x[1]]; }
+function fmtPct(x){ return (x*100).toFixed(3) + "%"; }
+function fmt(x){ return x.toFixed(6); }
+
+function compute(){
+  const mu2 = Number(document.getElementById('mu2').value)/100;
+  const mu3 = Number(document.getElementById('mu3').value)/100;
+  const rf  = Number(document.getElementById('rf').value)/100;
+  const s2  = Number(document.getElementById('s2').value)/100;
+  const s3  = Number(document.getElementById('s3').value)/100;
+  const rho = Number(document.getElementById('rho').value);
+  const muTarget = Number(document.getElementById('muTarget').value)/100;
+  const muExtra  = Number(document.getElementById('muExtra').value)/100;
+
+  const c11 = s2*s2, c22 = s3*s3, c12 = rho*s2*s3;
+  const C = [[c11,c12],[c12,c22]];
+  const invC = inv2(c11,c12,c12,c22);
+
+  const ones = [1,1];
+  const mu = [mu2, mu3];
+
+  let w_mv = mul2(invC, ones);
+  const sum_mv = w_mv[0]+w_mv[1];
+  w_mv = [w_mv[0]/sum_mv, w_mv[1]/sum_mv];
+  const mu_mv = dot(w_mv, mu);
+  const var_mv = dot(w_mv, mul2(C, w_mv));
+  const s_mv = Math.sqrt(var_mv);
+
+  const muExcess = [mu2 - rf, mu3 - rf];
+  let w_t = mul2(invC, muExcess);
+  const sum_t = w_t[0] + w_t[1];
+  w_t = [w_t[0]/sum_t, w_t[1]/sum_t];
+  const mu_t = dot(w_t, mu);
+  const s_t = Math.sqrt(dot(w_t, mul2(C, w_t)));
+  const sharpe = (mu_t - rf)/s_t;
+
+  const y_b = (muTarget - rf) / (mu_t - rf);
+  const w_rf_b = 1 - y_b;
+  const w2_b = y_b * w_t[0];
+  const w3_b = y_b * w_t[1];
+  const s_b = Math.abs(y_b) * s_t;
+
+  const y_c = (muExtra - rf) / (mu_t - rf);
+  const w_rf_c = 1 - y_c;
+  const w2_c = y_c * w_t[0];
+  const w3_c = y_c * w_t[1];
+  const s_c = Math.abs(y_c) * s_t;
+
+  const out = [
+    "Вхідні: μ2="+fmtPct(mu2)+", μ3="+fmtPct(mu3)+", rf="+fmtPct(rf)+", σ2="+fmtPct(s2)+", σ3="+fmtPct(s3)+", ρ23="+rho,
+    "",
+    "a) Ризикові портфелі (A2,A3):",
+    "  Мінімальна дисперсія: w2="+fmt(w_mv[0])+", w3="+fmt(w_mv[1])+", μ="+fmtPct(mu_mv)+", σ="+fmtPct(s_mv),
+    "  Тангенційний серед ризикових: w2="+fmt(w_t[0])+", w3="+fmt(w_t[1])+", μ="+fmtPct(mu_t)+", σ="+fmtPct(s_t)+", Sharpe="+sharpe.toFixed(3),
+    "",
+    "b) Оптимальний портфель з усіх ЦП при μ*="+fmtPct(muTarget)+":",
+    "  Частка у ризиковому тангенційному y="+fmt(y_b)+" → ваги: rf="+fmt(w_rf_b)+", A2="+fmt(w2_b)+", A3="+fmt(w3_b)+", σ*="+fmtPct(s_b),
+    (y_b<=1 && y_b>=0)? "  Інвестор ЛЕНДИТЬ частину у rf." : (y_b>1? "  Інвестор БЕРЕ В БОРГ під rf (левередж)." : "  Інвестор більше 100% у rf (дуже обережний)."),
+    "",
+    "c) Для μ*="+fmtPct(muExtra)+":",
+    "  y="+fmt(y_c)+" → rf="+fmt(w_rf_c)+", A2="+fmt(w2_c)+", A3="+fmt(w3_c)+", σ*="+fmtPct(s_c),
+    (y_c>1? "  Це можливе лише з кредитним плечем (borrow at rf)." : (y_c>=0? "  Досягається комбінацією з rf без боргу." : "  Потрібна чиста позиція у rf (повністю обережно)."))
+  ].join("\n");
+  document.querySelector('#out pre').textContent = out;
+
+  return {mu2,mu3,rf,s2,s3,rho,C,w_mv,mu_mv,s_mv,w_t,mu_t,s_t,sharpe,y_b,s_b,y_c,s_c};
+}
+
+function draw(){
+  const ctx = document.getElementById('chart').getContext('2d');
+  const res = compute();
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const pad = 40;
+  function xσ(s){ 
+    const sMax = Math.max(res.s_t*1.8, res.s_c*1.2, res.s_mv*1.5, 0.06);
+    return pad + (W-2*pad) * (s / sMax);
+  }
+  function yμ(m){
+    const mMin = Math.min(res.rf-0.05, res.mu_mv-0.05);
+    const mMax = Math.max(res.mu_t+0.10, res.mu3+0.10);
+    return H-pad - (H-2*pad) * ((m - mMin) / (mMax - mMin));
+  }
+  ctx.strokeStyle = "#999"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad, pad); ctx.lineTo(pad, H-pad); ctx.lineTo(W-pad, H-pad);
+  ctx.stroke();
+  ctx.fillStyle="#333"; ctx.fillText("σ", W-pad+8, H-pad+4);
+  ctx.fillText("μ", pad-12, pad-8);
+
+  ctx.fillStyle = "#000";
+  ctx.beginPath(); ctx.arc(xσ(0), yμ(res.rf), 4, 0, 2*Math.PI); ctx.fill();
+  ctx.fillText("rf", xσ(0)+6, yμ(res.rf)-4);
+
+  const pts = [];
+  for(let w=0; w<=1.0001; w+=0.01){
+    const wv = [w, 1-w];
+    const mu = wv[0]*res.mu2 + wv[1]*res.mu3;
+    const varr = wv[0]*wv[0]*res.C[0][0] + 2*wv[0]*wv[1]*res.C[0][1] + wv[1]*wv[1]*res.C[1][1];
+    const s = Math.sqrt(varr);
+    pts.push({s,mu});
+  }
+  ctx.strokeStyle="#1f77b4"; ctx.lineWidth=2;
+  ctx.beginPath();
+  pts.forEach((p,i)=>{ const x=xσ(p.s), y=yμ(p.mu); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.stroke();
+  ctx.fillStyle="#1f77b4"; ctx.fillText("Еф. множина A2–A3", xσ(pts[pts.length-1].s)-120, yμ(pts[pts.length-1].mu)-10);
+
+  ctx.fillStyle="#d62728";
+  ctx.beginPath(); ctx.arc(xσ(res.s_t), yμ(res.mu_t), 5, 0, 2*Math.PI); ctx.fill();
+  ctx.fillText("T", xσ(res.s_t)+6, yμ(res.mu_t)-4);
+
+  ctx.strokeStyle="#2ca02c"; ctx.setLineDash([5,5]);
+  ctx.beginPath();
+  ctx.moveTo(xσ(0), yμ(res.rf));
+  const sCml = res.s_t*1.5;
+  const muCml = res.rf + (res.mu_t-res.rf)*( (sCml)/res.s_t );
+  ctx.lineTo(xσ(sCml), yμ(muCml));
+  ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle="#2ca02c"; ctx.fillText("CML", xσ(sCml)-24, yμ(muCml)-8);
+}
+
+document.getElementById('run').addEventListener('click', compute);
+document.getElementById('plot').addEventListener('click', draw);
+</script>
+</body>
+</html>
